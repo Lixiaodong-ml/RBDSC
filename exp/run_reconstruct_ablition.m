@@ -1,0 +1,10 @@
+clc;
+clear;
+run("run_SC_perturb");
+run("run_SC_LS_perturb");
+run("run_SC_graph_perturb");
+run("run_SC_LS_graph_perturb");
+run("run_SC_perturb_bigdata");
+run("run_SC_LS_perturb_bigdata");
+run("run_SC_graph_perturb_bigdata");
+run("run_SC_LS_graph_perturb_bigdata");
