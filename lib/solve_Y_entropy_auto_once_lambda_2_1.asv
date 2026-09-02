@@ -1,0 +1,19 @@
+function [Y, objHistory, res_aio] = solve_Y_entropy_auto_once_lambda_2_1(L, Y, lambda, e_type, gt)
+%
+% Method B: Discrete coordinate descent with GLOBAL ACCEPT RULE
+%     min_Y  sum_k y_k^T L_S y_k / (4 * (1 - sum_k ((1_n^T y_k / n)^2)))\n%
+% Core principle: 
+%     Each sample move is ONLY accepted if the REAL RATIO OBJECTIVE strictly decreases.
+%     No local approximations or delta tricks.
+%     
+%     current_obj = F(Y) / G(Y)
+%     For each sample i, try all clusters p:
+%         candidate_obj = F(Y_try) / G(Y_try)
+%         if candidate_obj < current_obj - tol, ACCEPT
+%         else, REJECT
+%
+
+isDebug = false;
+
+if exist('gt', 'var')
+    isDebug = true;\nend\n\n[nSmp, nCluster] = size(Y);\ntol = 1e-12;\n\n% Compute initial real global objective value\ncurrent_obj = compute_ratio_objective(L, Y, nSmp);\nobjHistory = current_obj;\nlabel = vec2ind(Y')';\nres_aio = [];\n\nif isDebug\n    res_aio = my_eval_y_6_2025(label, gt);\nend\n\n% =========================================================================\n% Main coordinate descent loop: iterate over samples\n% =========================================================================\nfor i = 1:nSmp\n    m = label(i);\n    \n    % Skip if cluster m has only one sample (prevent empty cluster)\n    if sum(Y(:, m)) <= 1\n        continue;\n    end\n    \n    best_obj = current_obj;  % current objective is the baseline\n    best_p = m;              % no move is the default\n    best_Y = Y;              % no change to Y\n    \n    % Try all candidate clusters for sample i\n    for p = 1:nCluster\n        if p == m\n            continue;  % skip current cluster\n        end\n        \n        % Create candidate assignment\n        Y_try = Y;\n        Y_try(i, m) = 0;  % remove from cluster m\n        Y_try(i, p) = 1;  % assign to cluster p\n        \n        % Compute REAL global ratio objective for this candidate\n        candidate_obj = compute_ratio_objective(L, Y_try, nSmp);\n        \n        % ACCEPT only if strictly better (with tolerance)\n        if candidate_obj < best_obj - tol\n            best_obj = candidate_obj;\n            best_p = p;\n            best_Y = Y_try;\n            % Continue searching for even better cluster\n        end\n    end\n    \n    % If we found a better cluster, accept the move\n    if best_p ~= m\n        Y = best_Y;\n        label(i) = best_p;\n        current_obj = best_obj;  % Update the global objective\n        \n        % Record history\n        objHistory = [objHistory; current_obj];%#ok\n        \n        if isDebug\n            res_iter = my_eval_y_6_2025(label, gt);\n            res_aio = [res_aio; res_iter];%#ok\n        end\n    end\nend\n\n% =========================================================================\n% Helper function: compute the actual ratio objective\n% =========================================================================\n    function obj_val = compute_ratio_objective(L, Y, nSmp)\n        % F = sum_k y_k^T L y_k\n        F = sum(sum(Y .* (L * Y)));\n        \n        % cluster sizes as proportions\n        cluster_sizes = sum(Y, 1)' / nSmp;\n        \n        % G = 4 * (1 - sum_k p_k^2)\n        balance_term = 1 - sum(cluster_sizes.^2);\n        G = 4 * max(balance_term, eps);\n        \n        % ratio objective\n        obj_val = F / G;\n    end\nend
